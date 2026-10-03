@@ -1,5 +1,7 @@
 # Wortlauf
 
+**Ausprobieren: [wederw.github.io/wortlauf](https://wederw.github.io/wortlauf/)**
+
 Ein Reader für eigene Bücher und Dokumente, der komplett im Browser läuft. Du fügst eine Datei
 hinzu, liest sie normal oder wechselst in den Lesemodus: oben erscheint der Text Wort für Wort an
 fester Stelle (centered RSVP), unten siehst du die ganze Seite, auf der das aktuelle Wort markiert
