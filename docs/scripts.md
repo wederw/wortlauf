@@ -1,7 +1,9 @@
 # Scripts schreiben
 
-Ein Script ist ein JavaScript-Modul mit einem Objekt als `default`-Export. Lege es als
-`plugins/local/<name>.js` ab. Es erscheint danach in jedem Leseprofil, zunächst abgeschaltet.
+Ein Script ist ein JavaScript-Modul mit einem Objekt als `default`-Export. Du importierst es in
+der App unter **Einstellungen → Eigene Scripts**. Es erscheint danach in jedem Leseprofil, zunächst
+abgeschaltet. Das Script bleibt in deinem Browser; nach einer Änderung importierst du die Datei
+einfach noch einmal. Die mitgelieferten Scripts in `src/plugins` sind gute Vorlagen.
 
 ```js
 export default {
@@ -113,7 +115,10 @@ settings: {
 
 ## Umgebung
 
-Scripts laufen in einem Web Worker: kein DOM, kein `fetch`, keine Sockets, kein Speicher. Hooks
-sind synchron und sollten schnell sein, denn `timing` und `layout` laufen für jedes Token des
+Scripts laufen in einem Web Worker: kein DOM, kein `fetch`, keine Sockets, kein Speicher. Die
+Content-Security-Policy der Seite gilt auch im Worker, deshalb kann ein Script keinen Code und keine
+Daten von anderen Adressen laden, auch nicht über `import()`.
+
+Hooks sind synchron und sollten schnell sein, denn `timing` und `layout` laufen für jedes Token des
 Buches. Wirft ein Hook einen Fehler, schaltet der Kern das Script bis zum nächsten Vorbereiten ab
 und zeigt die Meldung im Lesemodus.

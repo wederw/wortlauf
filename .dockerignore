@@ -1,8 +1,0 @@
-**/node_modules
-frontend/dist
-data
-plugins/local/*
-!plugins/local/README.md
-**/__pycache__
-**/.pytest_cache
-.git
