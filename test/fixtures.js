@@ -58,8 +58,8 @@ function pdfString(text) {
 }
 
 /**
- * A PDF with Helvetica text. `pages` is a list of pages, each a list of [x, y, text, size?].
- * `outline` is a list of [title, page number].
+ * A PDF with Helvetica text. `pages` is a list of pages, each a list of [x, y, text, size?]
+ * or of raw content-stream operators as a string. `outline` is a list of [title, page number].
  */
 export function makePdf(pages, { title, outline = [] } = {}) {
   const objects = [];
@@ -68,7 +68,9 @@ export function makePdf(pages, { title, outline = [] } = {}) {
   const tree = add(null);
   const font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   const pageIds = pages.map((lines) => {
-    const stream = lines.map(([x, y, text, size = 10]) => `BT /F1 ${size} Tf ${x} ${y} Td ${pdfString(text)} Tj ET`).join('\n');
+    const stream = lines
+      .map((entry) => (typeof entry === 'string' ? entry : `BT /F1 ${entry[3] ?? 10} Tf ${entry[0]} ${entry[1]} Td ${pdfString(entry[2])} Tj ET`))
+      .join('\n');
     const contents = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     return add(`<< /Type /Page /Parent ${tree} 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contents} 0 R >>`);
   });

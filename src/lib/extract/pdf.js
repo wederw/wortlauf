@@ -4,19 +4,20 @@ import { clean, ExtractError, finish } from './common.js';
 
 const PAGE_NUMBER = /^[^\p{L}\p{N}]*(seite|page)?[^\p{L}\p{N}]*\d{1,4}[^\p{L}\p{N}]*$/iu;
 const SENTENCE_END = /[.!?:…]["'»«”“’)\]]*$/;
-const STARTS_LOWER = /^\p{Ll}/u;
+export const STARTS_LOWER = /^\p{Ll}/u;
 
-/** Text lines of one page in reading order, each with its baseline and font size. */
-function pageLines(content) {
+/**
+ * Groups the positioned text items of one page into lines in reading order. Each part is an
+ * item; `spaced` marks a visible gap before it, which separates words like a space.
+ * The page view uses the same grouping to find the extracted words on the page.
+ */
+export function groupLines(content) {
   const lines = [];
   let line = null;
   let lastEnd = null;
 
   const close = () => {
-    if (line) {
-      const text = line.parts.join('').replace(/\s+/g, ' ').trim();
-      if (text) lines.push({ text, y: line.y, size: line.size });
-    }
+    if (line?.parts.length) lines.push(line);
     line = null;
   };
 
@@ -31,9 +32,7 @@ function pageLines(content) {
       lastEnd = null;
     }
     if (item.str) {
-      const previous = line.parts.at(-1) ?? '';
-      if (lastEnd !== null && x - lastEnd > size * 0.15 && !/\s$/.test(previous) && !/^\s/.test(item.str)) line.parts.push(' ');
-      line.parts.push(item.str);
+      line.parts.push({ item, spaced: lastEnd !== null && x - lastEnd > size * 0.15 });
       line.size = Math.max(line.size, size);
     }
     lastEnd = x + (item.width || 0);
@@ -43,6 +42,18 @@ function pageLines(content) {
   return lines;
 }
 
+/** Text lines of one page in reading order, each with its baseline and font size. */
+function pageLines(content) {
+  return groupLines(content).flatMap((line) => {
+    const text = line.parts
+      .map(({ item, spaced }) => (spaced ? ` ${item.str}` : item.str))
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text ? [{ text, y: line.y, size: line.size }] : [];
+  });
+}
+
 const median = (values) => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -50,20 +61,31 @@ const median = (values) => {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
-/** Turns positioned lines into plain strings; an empty string marks a paragraph gap. */
+/**
+ * Turns positioned lines into plain strings; an empty string marks a paragraph gap.
+ * Line spacing is measured relative to the font size, so footnotes in a smaller size space
+ * alike, and the usual spacing is the most common one: body text outnumbers gaps.
+ */
 function withGaps(pages) {
-  const spacings = [];
+  const steps = (lines) => lines.map((line, i) => (i > 0 ? (lines[i - 1].y - line.y) / line.size : 0));
+  const counts = new Map();
   for (const lines of pages) {
-    for (let i = 1; i < lines.length; i++) {
-      const step = lines[i - 1].y - lines[i].y;
-      if (step > 0) spacings.push(step);
+    for (const step of steps(lines).slice(1)) {
+      if (step <= 0) continue;
+      const bin = Math.round(step * 20) / 20;
+      counts.set(bin, (counts.get(bin) ?? 0) + 1);
     }
   }
-  const usual = median(spacings) || 12;
+  let usual = 1.2;
+  let seen = 0;
+  for (const [bin, count] of counts) {
+    if (count > seen || (count === seen && bin < usual)) [usual, seen] = [bin, count];
+  }
   return pages.map((lines) => {
+    const ratios = steps(lines);
     const out = [];
     lines.forEach((line, i) => {
-      if (i > 0 && lines[i - 1].y - line.y > usual * 1.3) out.push('');
+      if (i > 0 && ratios[i] > usual * 1.3 + 0.05) out.push('');
       out.push(line.text);
     });
     return out;

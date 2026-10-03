@@ -1,11 +1,12 @@
 <script>
-  // Normal view of a book: the extracted text chapter by chapter, for PDFs also the
-  // original pages. The marker is the reading position; the reading mode starts there.
+  // Normal view of a book: the extracted text chapter by chapter, for PDFs the original pages
+  // (or, on request, their text). The marker is the reading position; the reading mode
+  // starts there.
   import { onMount, tick } from 'svelte';
   import Icon from '../lib/Icon.svelte';
   import * as library from '../lib/library.js';
   import { positionAt, wordAt } from '../lib/progress.js';
-  import { app, go, toast } from '../lib/state.svelte.js';
+  import { app, go, saveSettings, toast } from '../lib/state.svelte.js';
   import PdfView from './PdfView.svelte';
   import Reader from './Reader.svelte';
 
@@ -23,11 +24,26 @@
   let panel = $state(null);
   let pdfPage = $state(1);
   let article = $state();
+  let pdfView = $state();
   let before = []; // characters before each paragraph, for the progress fraction
   let total = 1;
 
   const span = $derived(doc ? [doc.chapters[chapter].start, doc.chapters[chapter + 1]?.start ?? doc.paras.length] : [0, 0]);
   const fraction = $derived(doc ? Math.min(1, ((before[pos.para] ?? 0) + pos.offset) / total) : 0);
+  const markRange = $derived.by(() => {
+    if (!doc) return null;
+    const [start, end] = wordAt(doc.paras[pos.para].t, pos.offset);
+    return { para: pos.para, start, end };
+  });
+
+  const preferredView = () => (book?.format === 'pdf' && app.settings.pdfView !== 'text' ? 'pdf' : 'text');
+
+  function setView(next) {
+    view = next;
+    app.settings.pdfView = next === 'pdf' ? 'original' : 'text';
+    saveSettings();
+    if (next === 'text') showMarker();
+  }
 
   function chapterOf(para) {
     let found = 0;
@@ -60,8 +76,13 @@
   function goChapter(index) {
     chapter = Math.max(0, Math.min(doc.chapters.length - 1, index));
     panel = null;
-    view = 'text';
-    scrollTo({ top: 0 });
+    if (view === 'pdf') pdfView?.showPage(doc.paras[doc.chapters[chapter].start].pg ?? 1);
+    else scrollTo({ top: 0 });
+  }
+
+  function pickWord(at, double) {
+    setMarker(at.para, at.offset);
+    if (double) startReading();
   }
 
   function readFromChapter() {
@@ -86,7 +107,7 @@
     pos = position;
     wpm = speed;
     reading = false;
-    view = 'text';
+    view = preferredView();
     persist();
     await showMarker();
   }
@@ -114,9 +135,9 @@
   function openBookmark(mark) {
     pos = { para: Math.min(mark.para, doc.paras.length - 1), offset: mark.offset };
     panel = null;
-    view = 'text';
     persist();
-    showMarker();
+    if (view === 'pdf') tick().then(() => pdfView?.reveal());
+    else showMarker();
   }
 
   function keys(event) {
@@ -142,6 +163,7 @@
       total = Math.max(1, sum);
       book = meta;
       doc = content;
+      view = preferredView();
       bookmarks = marks;
       const saved = await library.loadProgress(id);
       if (saved) {
@@ -172,8 +194,8 @@
     <div class="tools">
       {#if book.format === 'pdf'}
         <div class="switch" role="group" aria-label="Ansicht">
-          <button class:active={view === 'text'} onclick={() => { view = 'text'; showMarker(); }}>Text</button>
-          <button class:active={view === 'pdf'} onclick={() => (view = 'pdf')}>Original</button>
+          <button class:active={view === 'pdf'} onclick={() => setView('pdf')}>Original</button>
+          <button class:active={view === 'text'} onclick={() => setView('text')}>Text</button>
         </div>
       {/if}
       <button class="icon quiet" onclick={() => (panel = panel === 'toc' ? null : 'toc')} aria-label="Inhalt" aria-expanded={panel === 'toc'}><Icon name="list" /></button>
@@ -219,7 +241,8 @@
         <span class="muted">Seite {pdfPage}</span>
         <button onclick={readFromPage}>Ab dieser Seite lesen</button>
       </div>
-      <PdfView bookId={id} page={doc.paras[pos.para].pg ?? 1} onpage={(number) => (pdfPage = number)} />
+      <p class="muted small pdfhint">Ein Klick auf ein Wort setzt die Lesemarke, ein Doppelklick startet dort den Lesemodus.</p>
+      <PdfView bind:this={pdfView} bookId={id} {doc} mark={markRange} onpick={pickWord} onpage={(number) => (pdfPage = number)} />
     {:else}
       <div class="chapterhead">
         <span class="muted">{doc.chapters[chapter].title}</span>
@@ -380,5 +403,8 @@
   }
   .hint {
     margin-top: 1.5rem;
+  }
+  .pdfhint {
+    margin: -0.75rem 0 1rem;
   }
 </style>

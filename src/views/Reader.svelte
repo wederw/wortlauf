@@ -31,6 +31,8 @@
   let pageWidth = $state(0);
   let pageHeight = $state(0);
   let capacity = $state(0); // characters that fit on one text page
+  let pdfShown = $state(0); // page of the original PDF on screen
+  let pdfPages = $state(0);
   let fontTick = $state(0);
   let root = $state();
 
@@ -194,10 +196,16 @@
   const pageIndex = $derived(pageOf(pageStarts, token ? token.para : start.para));
   const pageFrom = $derived(pageStarts[pageIndex]);
   const pageTo = $derived(pageStarts[pageIndex + 1] ?? doc.paras.length);
+  const showOriginal = $derived(printed && app.settings.pdfView !== 'text');
   const pageLabel = $derived(
-    printed ? `Seite ${doc.paras[pageFrom].pg} von ${doc.paras.at(-1).pg}` : `Seite ${pageIndex + 1} von ${pageStarts.length}`,
+    showOriginal && pdfShown
+      ? `Seite ${pdfShown} von ${pdfPages}`
+      : printed
+        ? `Seite ${doc.paras[pageFrom].pg} von ${doc.paras.at(-1).pg}`
+        : `Seite ${pageIndex + 1} von ${pageStarts.length}`,
   );
-  const showOriginal = $derived(printed && app.settings.pageView === 'original');
+  // the word to mark on the page, also before the text is prepared
+  const mark = $derived(token ?? { para: start.para, start: start.offset, end: start.offset + 1 });
 
   // A text page holds about as much as the area below the word shows. Small changes, such as
   // a mobile browser hiding its address bar, keep the pages as they are.
@@ -209,8 +217,8 @@
     if (!capacity || Math.abs(next - capacity) / capacity > 0.15) capacity = next;
   });
 
-  function setPageView(view) {
-    app.settings.pageView = view;
+  function setPdfView(view) {
+    app.settings.pdfView = view;
     saveSettings();
   }
 
@@ -373,8 +381,8 @@
       {/if}
       {#if printed}
         <div class="switch" role="group" aria-label="Seitenansicht">
-          <button class:active={!showOriginal} onclick={() => setPageView('text')}>Text</button>
-          <button class:active={showOriginal} onclick={() => setPageView('original')}>Original</button>
+          <button class:active={showOriginal} onclick={() => setPdfView('original')}>Original</button>
+          <button class:active={!showOriginal} onclick={() => setPdfView('text')}>Text</button>
         </div>
       {/if}
     </header>
@@ -395,7 +403,16 @@
 
     <div class="pagearea">
       {#if showOriginal}
-        <PdfPage bookId={book.id} page={doc.paras[pageFrom].pg ?? 1} />
+        <PdfPage
+          bookId={book.id}
+          {doc}
+          {mark}
+          onjump={jump}
+          onpage={(number, total) => {
+            pdfShown = number;
+            pdfPages = total;
+          }}
+        />
       {:else}
         <PageView {doc} from={pageFrom} to={pageTo} mark={token} onjump={jump} bind:width={pageWidth} bind:height={pageHeight} />
       {/if}
@@ -694,6 +711,11 @@
     }
     .controls {
       gap: 0.25rem;
+    }
+    /* page number and view switch share the first row, the times take the second */
+    .times {
+      order: 3;
+      width: 100%;
     }
   }
 

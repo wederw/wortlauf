@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS = {
   readerFont: 'literata',
   wordSize: 56,
   guides: true,
-  pageView: 'text', // below the word in the reading mode: 'text' or, for PDFs, 'original'
+  pdfView: 'original', // how PDFs are shown: 'original' pages or the extracted 'text'
   defaultWpm: 300,
   activeProfile: 'standard',
   profiles: [

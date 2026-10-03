@@ -16,11 +16,11 @@ die Dateien im Browser ein und speichert Bücher, Lesestand und Einstellungen in
 - **Formate:** PDF, ePub, Word (.docx), Text, Markdown, HTML
 - **Lesemodus:** oberes Drittel das Einzelwort, untere zwei Drittel die ganze Seite mit dem
   aktuellen Wort markiert. Die Seite blättert mit; ein Klick auf ein Wort springt dorthin. Bei
-  PDFs zeigt der untere Bereich wahlweise den Text oder die Originalseite.
+  PDFs ist das die Originalseite mit Bildern und Layout, auf Wunsch der reine Text.
 - **Steuerung:** Tempo in Wörtern pro Minute, Satz-, Absatz- und Kapitelsprünge,
   Inhaltsverzeichnis, Lesezeichen, Restzeit für Kapitel und Buch
-- **Normalansicht:** Text kapitelweise, bei PDFs zusätzlich die Originalseiten. Ein Klick auf ein
-  Wort setzt die Lesemarke, ein Doppelklick startet dort den Lesemodus.
+- **Normalansicht:** PDFs als Originalseiten, alle anderen Formate als Text kapitelweise. Ein Klick
+  auf ein Wort setzt die Lesemarke, ein Doppelklick startet dort den Lesemodus.
 - **Leseprofile:** Stapel von Scripts mit eigenen Einstellungen, zum Beispiel „Roman“ und „Fachtext“
 - **Eigene Scripts:** als .js-Datei importieren, sie bleiben im Browser
 - **Offline:** nach dem ersten Aufruf funktioniert die App auch ohne Netz und lässt sich als App
@@ -72,6 +72,10 @@ im Lesemodus gemeldet. Die Hooks im Einzelnen stehen in [docs/scripts.md](docs/s
 - PDFs ohne Textebene (Scans) brauchen vorher OCR, zum Beispiel mit `ocrmypdf`.
 - Absätze und Lesereihenfolge eines PDFs werden aus der Lage der Zeilen erschlossen. Bei
   mehrspaltigem Satz, Tabellen und Fußnoten kann das danebenliegen.
+- Die Markierung auf einer PDF-Seite wird aus der Lage der Buchstaben geschätzt und kann bei
+  ungewöhnlichen Schriften ein wenig danebenliegen.
+- Seiten, auf denen nur Bilder stehen, überspringt der Lesemodus, weil es dort nichts zu lesen
+  gibt. In der Normalansicht sind sie zu sehen.
 - ePubs werden als reiner Text gezeigt, ohne Bilder und ohne das Layout des Verlags.
 - Kopiergeschützte Dateien (DRM) lassen sich nicht lesen.
 - Lange Wörter werden nach einer einfachen Silbenregel geteilt, nicht nach Wörterbuch.
@@ -82,7 +86,7 @@ im Lesemodus gemeldet. Die Hooks im Einzelnen stehen in [docs/scripts.md](docs/s
 ```sh
 npm ci
 npm run dev      # Entwicklungsserver auf http://localhost:5173
-npm test         # Extraktion, Seiteneinteilung, Script-Engine und mitgelieferte Scripts
+npm test         # Extraktion, Seiten, Wortlage im PDF, Script-Engine und mitgelieferte Scripts
 npm run build    # fertige Seite in dist/
 ```
 
