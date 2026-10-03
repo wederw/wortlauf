@@ -1,0 +1,11 @@
+# private reading scripts never leave this machine
+plugins/local/*
+!plugins/local/README.md
+
+data/
+node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
