@@ -15,6 +15,8 @@
     bookmark: 'M7 4h10v16l-5-4-5 4z',
     up: 'M6 15l6-6 6 6',
     down: 'M6 9l6 6 6-6',
+    plus: 'M12 5v14M5 12h14',
+    minus: 'M5 12h14',
   };
 </script>
 

@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS = {
   wordSize: 56,
   guides: true,
   pdfView: 'original', // how PDFs are shown: 'original' pages or the extracted 'text'
+  pdfZoom: 1, // page width relative to the document area
+  textZoom: 1, // type size relative to the default
   defaultWpm: 300,
   activeProfile: 'standard',
   profiles: [

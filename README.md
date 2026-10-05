@@ -2,10 +2,10 @@
 
 **Ausprobieren: [wederw.github.io/wortlauf](https://wederw.github.io/wortlauf/)**
 
-Ein Reader für eigene Bücher und Dokumente, der komplett im Browser läuft. Du fügst eine Datei
-hinzu, liest sie normal oder wechselst in den Lesemodus: oben erscheint der Text Wort für Wort an
-fester Stelle (centered RSVP), unten siehst du die ganze Seite, auf der das aktuelle Wort markiert
-ist. Wie der Lesemodus zerlegt, taktet und anzeigt, bestimmen austauschbare Scripts.
+Ein Reader für eigene Bücher und Dokumente, der komplett im Browser läuft. Oben erscheint der Text
+Wort für Wort an fester Stelle (centered RSVP), darunter siehst du das Dokument selbst, PDFs mit
+Bildern und Layout, und das aktuelle Wort ist darin markiert. Wie der Text zerlegt, getaktet und
+angezeigt wird, bestimmen austauschbare Scripts.
 
 **Deine Bücher verlassen nie dein Gerät.** Es gibt keinen Server und kein Konto. Wortlauf liest
 die Dateien im Browser ein und speichert Bücher, Lesestand und Einstellungen in dessen Speicher
@@ -14,13 +14,15 @@ die Dateien im Browser ein und speichert Bücher, Lesestand und Einstellungen in
 ## Funktionen
 
 - **Formate:** PDF, ePub, Word (.docx), Text, Markdown, HTML
-- **Lesemodus:** oberes Drittel das Einzelwort, untere zwei Drittel die ganze Seite mit dem
-  aktuellen Wort markiert. Die Seite blättert mit; ein Klick auf ein Wort springt dorthin. Bei
-  PDFs ist das die Originalseite mit Bildern und Layout, auf Wunsch der reine Text.
+- **Ein Bildschirm:** oberes Drittel die Lesestelle als Einzelwort, untere zwei Drittel das
+  Dokument zum Durchscrollen. PDFs erscheinen als Originalseiten, alles andere als durchgehender
+  Text; bei PDFs gibt es den Text auf Wunsch auch. Das aktuelle Wort ist markiert und bleibt im
+  Blick, ein Klick auf ein Wort springt dorthin.
+- **Zoom:** Das Dokument lässt sich mit zwei Fingern, Strg+Mausrad oder den Knöpfen − und +
+  vergrößern, ohne dass die übrige Seite mitzoomt. PDFs werden größer, Text bekommt eine größere
+  Schrift.
 - **Steuerung:** Tempo in Wörtern pro Minute, Satz-, Absatz- und Kapitelsprünge,
-  Inhaltsverzeichnis, Lesezeichen, Restzeit für Kapitel und Buch
-- **Normalansicht:** PDFs als Originalseiten, alle anderen Formate als Text kapitelweise. Ein Klick
-  auf ein Wort setzt die Lesemarke, ein Doppelklick startet dort den Lesemodus.
+  Inhaltsverzeichnis, Lesezeichen
 - **Leseprofile:** Stapel von Scripts mit eigenen Einstellungen, zum Beispiel „Roman“ und „Fachtext“
 - **Eigene Scripts:** als .js-Datei importieren, sie bleiben im Browser
 - **Offline:** nach dem ersten Aufruf funktioniert die App auch ohne Netz und lässt sich als App
@@ -29,21 +31,22 @@ die Dateien im Browser ein und speichert Bücher, Lesestand und Einstellungen in
   einem anderen Gerät einspielen
 - **Statistik:** Lesezeit, Wörter und Tempo je Tag und Buch
 
-## Bedienung im Lesemodus
+## Bedienung
 
 | Taste | Wirkung |
 | --- | --- |
-| Leertaste, Enter | Start und Pause |
+| Leertaste | Start und Pause |
 | ← → | Satz zurück, vor |
 | Umschalt + ← → | Absatz zurück, vor |
 | Bild ↑ Bild ↓ | Kapitel zurück, vor |
 | ↑ ↓ | schneller, langsamer |
 | B | Lesezeichen setzen |
-| Esc | Lesemodus verlassen |
+| Esc | zurück zur Bibliothek |
 
 Auf dem Handy: Tippen auf das Wort startet und hält an, Wischen nach links oder rechts springt
-satzweise, Wischen nach oben oder unten ändert das Tempo. Quer gehalten stehen Wort und Seite
-nebeneinander.
+satzweise, Wischen nach oben oder unten ändert das Tempo. Im Dokument darunter scrollst und zoomst
+du wie gewohnt; Tippen auf ein Wort setzt die Lesestelle dorthin. Quer gehalten stehen Wort und
+Dokument nebeneinander.
 
 ## Mehrere Geräte
 
@@ -57,7 +60,7 @@ Browser, die Daten dauerhaft zu behalten; eine gelegentliche Sicherung schadet t
 
 ## Scripts
 
-Der Lesemodus besteht aus einer Pipeline mit fünf Hooks: `tokenize`, `timing`, `layout`, `flow`
+Die Wortanzeige besteht aus einer Pipeline mit fünf Hooks: `tokenize`, `timing`, `layout`, `flow`
 und `stats`. Die mitgelieferten Scripts liegen in [src/plugins](src/plugins). Eigene Scripts
 importierst du unter **Einstellungen → Eigene Scripts**; sie werden nirgends hochgeladen und
 gehören deshalb auch nicht in dieses Repository.
@@ -65,7 +68,7 @@ gehören deshalb auch nicht in dieses Repository.
 Scripts laufen in einem Web Worker ohne DOM. Die Seite hat eine Content-Security-Policy, die jede
 Verbindung zu anderen Adressen verbietet, und sie gilt auch im Worker. Scripts geben nur Daten
 zurück, die der Kern prüft, bevor er sie verwendet. Ein fehlerhaftes Script wird abgeschaltet und
-im Lesemodus gemeldet. Die Hooks im Einzelnen stehen in [docs/scripts.md](docs/scripts.md).
+über dem Dokument gemeldet. Die Hooks im Einzelnen stehen in [docs/scripts.md](docs/scripts.md).
 
 ## Grenzen
 
@@ -74,8 +77,8 @@ im Lesemodus gemeldet. Die Hooks im Einzelnen stehen in [docs/scripts.md](docs/s
   mehrspaltigem Satz, Tabellen und Fußnoten kann das danebenliegen.
 - Die Markierung auf einer PDF-Seite wird aus der Lage der Buchstaben geschätzt und kann bei
   ungewöhnlichen Schriften ein wenig danebenliegen.
-- Seiten, auf denen nur Bilder stehen, überspringt der Lesemodus, weil es dort nichts zu lesen
-  gibt. In der Normalansicht sind sie zu sehen.
+- Seiten, auf denen nur Bilder stehen, überspringt die Wortanzeige, weil es dort nichts zu lesen
+  gibt. Im Dokument darunter sind sie beim Scrollen zu sehen.
 - ePubs werden als reiner Text gezeigt, ohne Bilder und ohne das Layout des Verlags.
 - Kopiergeschützte Dateien (DRM) lassen sich nicht lesen.
 - Lange Wörter werden nach einer einfachen Silbenregel geteilt, nicht nach Wörterbuch.

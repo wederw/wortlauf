@@ -1,21 +1,20 @@
 <script>
-  // Reading mode. The upper third shows one word at a time, the lower two thirds the whole
-  // page around it. The script engine decides what is shown, for how long and where; this
-  // component only draws the result and forwards input to the player.
+  // The book screen. The upper third shows the reading position one word at a time, the lower
+  // two thirds the document itself: the original pages of a PDF, the text of everything else.
+  // The script engine decides what is shown, for how long and where; this component draws the
+  // result and forwards input to the player.
   import { onMount } from 'svelte';
   import { engine } from '../lib/engine.js';
   import Icon from '../lib/Icon.svelte';
   import { addReading } from '../lib/library.js';
   import { Player, UNIT } from '../lib/player.js';
-  import { pageOf, paginate } from '../lib/progress.js';
-  import { activeProfile, app, formatDuration, formatNumber, profileStack, READER_FONTS, saveSettings, toast } from '../lib/state.svelte.js';
-  import PageView from './PageView.svelte';
-  import PdfPage from './PdfPage.svelte';
+  import { activeProfile, app, profileStack, READER_FONTS, saveSettings, toast } from '../lib/state.svelte.js';
+  import DocPdf from './DocPdf.svelte';
+  import DocText from './DocText.svelte';
 
-  let { book, doc, start, wpm: initialWpm, bookmarks, onexit, onposition, onbookmark } = $props();
+  let { book, doc, start, wpm: initialWpm, bookmarks, onexit, onposition, onbookmark, onunbookmark } = $props();
 
   let tokens = $state.raw([]);
-  let remaining = $state.raw(new Float64Array(1)); // ms from each token to the end
   let chapterStarts = $state.raw([]); // first token index of every chapter
   let index = $state(0);
   let playing = $state(false);
@@ -24,15 +23,11 @@
   let ready = $state(false);
   let failure = $state('');
   let scriptErrors = $state([]);
-  let summary = $state([]);
   let panel = $state(null);
   let stageWidth = $state(0);
   let stageHeight = $state(0);
-  let pageWidth = $state(0);
-  let pageHeight = $state(0);
-  let capacity = $state(0); // characters that fit on one text page
-  let pdfShown = $state(0); // page of the original PDF on screen
-  let pdfPages = $state(0);
+  let where = $state(''); // page or chapter shown below
+  let docView = $state();
   let fontTick = $state(0);
   let root = $state();
 
@@ -59,7 +54,6 @@
         wakeLock?.release().catch(() => {});
         wakeLock = null;
         onposition(position(), wpm);
-        engine.stats(player.session).then((rows) => (summary = rows)).catch(() => {});
       }
     },
     onWpm: (value) => setWpm(value),
@@ -79,13 +73,6 @@
       else low = mid + 1;
     }
     return low;
-  }
-
-  function setTimes(ms) {
-    player.ms = ms;
-    const sums = new Float64Array(ms.length + 1);
-    for (let i = ms.length - 1; i >= 0; i--) sums[i] = sums[i + 1] + ms[i];
-    remaining = sums;
   }
 
   async function prepare(at) {
@@ -109,7 +96,6 @@
       chapterStarts = starts;
       player.load(tokens, result.ms, 0);
       player.wpm = wpm;
-      setTimes(result.ms);
       player.index = index = indexAt(at);
       failure = '';
       ready = true;
@@ -124,7 +110,7 @@
     const run = ++retimeRun;
     engine
       .retime(wpm)
-      .then((result) => run === retimeRun && setTimes(result.ms))
+      .then((result) => run === retimeRun && (player.ms = result.ms))
       .catch(() => {});
   }
 
@@ -155,7 +141,6 @@
     for (let i = 0; i < doc.chapters.length; i++) if (doc.chapters[i].start <= para) found = i;
     return found;
   });
-  const chapterLeft = $derived(remaining[index] - (remaining[chapterStarts[chapterIndex + 1] ?? tokens.length] ?? 0));
   const font = $derived(READER_FONTS[app.settings.readerFont] ?? READER_FONTS.literata);
   const fontSize = $derived(Math.max(20, Math.min(app.settings.wordSize, stageWidth / 9, stageHeight / 2.6)));
 
@@ -189,33 +174,19 @@
     return { parts, originX, shift: -anchorX * scale, scale };
   });
 
-  // ---- the page below the word
+  // ---- the document below the word
 
   const printed = book.format === 'pdf';
-  const pageStarts = $derived(paginate(doc, capacity || 1800));
-  const pageIndex = $derived(pageOf(pageStarts, token ? token.para : start.para));
-  const pageFrom = $derived(pageStarts[pageIndex]);
-  const pageTo = $derived(pageStarts[pageIndex + 1] ?? doc.paras.length);
   const showOriginal = $derived(printed && app.settings.pdfView !== 'text');
-  const pageLabel = $derived(
-    showOriginal && pdfShown
-      ? `Seite ${pdfShown} von ${pdfPages}`
-      : printed
-        ? `Seite ${doc.paras[pageFrom].pg} von ${doc.paras.at(-1).pg}`
-        : `Seite ${pageIndex + 1} von ${pageStarts.length}`,
-  );
-  // the word to mark on the page, also before the text is prepared
-  const mark = $derived(token ?? { para: start.para, start: start.offset, end: start.offset + 1 });
+  const zoom = $derived(showOriginal ? (app.settings.pdfZoom ?? 1) : (app.settings.textZoom ?? 1));
+  // the word to mark in the document, also before the text is prepared
+  const mark = $derived(token ? { para: token.para, start: token.start, end: token.end } : { para: start.para, start: start.offset, end: start.offset + 1 });
 
-  // A text page holds about as much as the area below the word shows. Small changes, such as
-  // a mobile browser hiding its address bar, keep the pages as they are.
-  $effect(() => {
-    if (!pageWidth || !pageHeight) return;
-    const lines = Math.floor((pageHeight - 40) / 27);
-    const perLine = Math.floor(Math.min(pageWidth - 32, 544) / 8.6);
-    const next = Math.max(400, Math.round((lines * perLine * 0.8) / 100) * 100);
-    if (!capacity || Math.abs(next - capacity) / capacity > 0.15) capacity = next;
-  });
+  function setZoom(value) {
+    if (showOriginal) app.settings.pdfZoom = value;
+    else app.settings.textZoom = value;
+    saveSettings();
+  }
 
   function setPdfView(view) {
     app.settings.pdfView = view;
@@ -230,15 +201,15 @@
 
   function addMark() {
     onbookmark(position());
-    panel = null;
   }
 
   // ---- input
 
   function keys(event) {
     if (event.target.closest('select, input')) return;
-    // a focused button handles Space and Enter itself
-    if ((event.key === ' ' || event.key === 'Enter') && event.target.closest('button')) return;
+    // Enter activates a focused button; Space always starts and stops, like in a media player
+    if (event.key === 'Enter' && event.target.closest('button')) return;
+    if (event.key === ' ') event.target.closest('button')?.blur();
     const unit = event.shiftKey ? UNIT.PARAGRAPH : UNIT.SENTENCE;
     const actions = {
       ' ': () => player.toggle(),
@@ -281,6 +252,15 @@
     prepare(start);
     document.fonts?.ready.then(() => fontTick++);
 
+    // Only the document zooms here, not the page: undo any page zoom and keep it off while
+    // this screen is open (Safari needs the gesture events as well).
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const original = viewport?.getAttribute('content');
+    viewport?.setAttribute('content', `${original}, maximum-scale=1`);
+    const stop = (event) => event.preventDefault();
+    document.addEventListener('gesturestart', stop);
+    document.addEventListener('gesturechange', stop);
+
     const save = setInterval(() => playing && onposition(position(), wpm), 10000);
     const hidden = () => document.hidden && player.pause();
     document.addEventListener('visibilitychange', hidden);
@@ -288,6 +268,9 @@
     root?.focus();
 
     return () => {
+      viewport?.setAttribute('content', original);
+      document.removeEventListener('gesturestart', stop);
+      document.removeEventListener('gesturechange', stop);
       clearInterval(save);
       document.removeEventListener('visibilitychange', hidden);
       window.removeEventListener('pagehide', report);
@@ -307,7 +290,7 @@
 <div class="reader" class:playing bind:this={root} tabindex="-1">
   <section class="focus">
     <header class="chrome">
-      <button class="icon quiet" onclick={exit} aria-label="Lesemodus verlassen"><Icon name="close" /></button>
+      <button class="icon quiet" onclick={exit} aria-label="Zur Bibliothek"><Icon name="back" /></button>
       <div class="where">
         <span class="booktitle">{book.title}</span>
         <span class="muted small">{doc.chapters[chapterIndex]?.title}</span>
@@ -351,7 +334,7 @@
         <div class="controls">
           <div class="group">
             <button class="icon quiet" onclick={() => (panel = panel === 'toc' ? null : 'toc')} aria-label="Inhalt und Lesezeichen" aria-expanded={panel === 'toc'}><Icon name="list" /></button>
-            <button class="icon quiet roomy" onclick={() => onbookmark(position())} aria-label="Lesezeichen setzen"><Icon name="bookmark" /></button>
+            <button class="icon quiet roomy" onclick={addMark} aria-label="Lesezeichen setzen"><Icon name="bookmark" /></button>
           </div>
           <div class="group transport">
             <button class="icon quiet roomy" onclick={() => player.back(UNIT.PARAGRAPH)} aria-label="Absatz zurück"><Icon name="backFar" /></button>
@@ -372,49 +355,29 @@
 
   <section class="sheet">
     <header class="sheethead small">
-      <span class="pagelabel">{pageLabel}</span>
-      {#if ready}
-        <span class="muted times">
-          <span>Kapitel noch {formatDuration(chapterLeft)}</span>
-          <span>Buch noch {formatDuration(remaining[index])}</span>
-        </span>
-      {/if}
+      <span class="pagelabel">{where}</span>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button class="icon quiet" onclick={() => docView?.zoomBy(1 / 1.25)} aria-label="Verkleinern"><Icon name="minus" size={18} /></button>
+        <span class="percent">{Math.round(zoom * 100)} %</span>
+        <button class="icon quiet" onclick={() => docView?.zoomBy(1.25)} aria-label="Vergrößern"><Icon name="plus" size={18} /></button>
+      </div>
       {#if printed}
-        <div class="switch" role="group" aria-label="Seitenansicht">
+        <div class="switch" role="group" aria-label="Ansicht">
           <button class:active={showOriginal} onclick={() => setPdfView('original')}>Original</button>
           <button class:active={!showOriginal} onclick={() => setPdfView('text')}>Text</button>
         </div>
       {/if}
     </header>
 
-    {#if scriptErrors.length || (!playing && summary.length && player.started)}
-      <div class="notes small">
-        {#if !playing && summary.length && player.started}
-          <dl class="summary">
-            <div><dt>Gelesen</dt><dd>{formatNumber(player.session.words)} Wörter in {formatDuration(player.session.activeMs)}</dd></div>
-            {#each summary as row}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}
-          </dl>
-        {/if}
-        {#each scriptErrors as problem}
-          <p class="error">Script {problem.plugin} wurde abgeschaltet ({problem.hook}): {problem.message}</p>
-        {/each}
-      </div>
-    {/if}
+    {#each scriptErrors as problem}
+      <p class="error small problem">Script {problem.plugin} wurde abgeschaltet ({problem.hook}): {problem.message}</p>
+    {/each}
 
-    <div class="pagearea">
+    <div class="docarea">
       {#if showOriginal}
-        <PdfPage
-          bookId={book.id}
-          {doc}
-          {mark}
-          onjump={jump}
-          onpage={(number, total) => {
-            pdfShown = number;
-            pdfPages = total;
-          }}
-        />
+        <DocPdf bind:this={docView} bookId={book.id} {doc} {mark} {zoom} onzoom={setZoom} onjump={jump} onpage={(label) => (where = label)} />
       {:else}
-        <PageView {doc} from={pageFrom} to={pageTo} mark={token} onjump={jump} bind:width={pageWidth} bind:height={pageHeight} />
+        <DocText bind:this={docView} {doc} {mark} {zoom} onzoom={setZoom} onjump={jump} onpage={(label) => (where = label)} />
       {/if}
     </div>
 
@@ -429,8 +392,11 @@
         <h2>Lesezeichen</h2>
         <button onclick={addMark}>Lesezeichen hier setzen</button>
         <ol>
-          {#each bookmarks as mark (mark.id)}
-            <li><button class="quiet" onclick={() => { player.seek(indexAt(mark)); panel = null; }}>{mark.snippet} …</button></li>
+          {#each bookmarks as saved (saved.id)}
+            <li class="bookmark">
+              <button class="quiet" onclick={() => { player.seek(indexAt(saved)); panel = null; }}>{saved.snippet} …</button>
+              <button class="icon quiet" onclick={() => onunbookmark(saved)} aria-label="Lesezeichen entfernen"><Icon name="close" size={16} /></button>
+            </li>
           {/each}
         </ol>
       </aside>
@@ -439,7 +405,7 @@
 </div>
 
 <style>
-  /* Upper third: the word. Lower two thirds: the page. */
+  /* Upper third: the word. Lower two thirds: the document. No page zoom anywhere here. */
   .reader {
     position: fixed;
     inset: 0;
@@ -448,11 +414,13 @@
     background: var(--bg);
     outline: none;
     overflow: hidden;
+    touch-action: pan-x pan-y;
   }
   .focus {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
+    min-width: 0;
     border-bottom: 1px solid var(--line);
   }
   .sheet {
@@ -460,6 +428,7 @@
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
     min-height: 0;
+    min-width: 0;
     background: var(--surface);
   }
 
@@ -478,8 +447,9 @@
   header.chrome {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     padding-top: max(0.4rem, env(safe-area-inset-top));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
   }
   .where {
     display: grid;
@@ -497,7 +467,7 @@
     font-weight: 600;
   }
   header select {
-    max-width: 9rem;
+    max-width: 8.5rem;
   }
 
   .stage {
@@ -606,27 +576,38 @@
 
   .sheethead {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem 1rem;
-    padding: 0.45rem max(1rem, env(safe-area-inset-right)) 0.45rem max(1rem, env(safe-area-inset-left));
+    gap: 0.5rem;
+    padding: 0.25rem max(0.75rem, env(safe-area-inset-right)) 0.25rem max(1rem, env(safe-area-inset-left));
     border-bottom: 1px solid var(--line);
+    white-space: nowrap;
   }
   .pagelabel {
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .times {
+  .zoom {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0 1rem;
+    align-items: center;
+    margin-left: auto;
+  }
+  .zoom .icon {
+    padding: 0.3rem;
+  }
+  .percent {
+    min-width: 3.2rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .switch {
     display: flex;
-    margin-left: auto;
   }
   .switch button {
     border-radius: 0;
-    padding: 0.15rem 0.6rem;
+    padding: 0.15rem 0.55rem;
   }
   .switch button:first-child {
     border-radius: var(--radius) 0 0 var(--radius);
@@ -639,34 +620,18 @@
     background: var(--bg);
     font-weight: 700;
   }
-  .notes {
-    display: grid;
-    gap: 0.25rem;
-    padding: 0.5rem max(1rem, env(safe-area-inset-right)) 0.5rem max(1rem, env(safe-area-inset-left));
+  .problem {
+    padding: 0.4rem 1rem;
     border-bottom: 1px solid var(--line);
   }
-  .summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 1.5rem;
-    margin: 0;
-  }
-  .summary div {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .summary dt {
-    color: var(--muted);
-  }
-  .summary dd {
-    margin: 0;
-  }
-  /* a fixed-height box, so the page inside scrolls instead of growing */
-  .pagearea {
+  /* a fixed-height box, so the document inside scrolls instead of growing */
+  .docarea {
     grid-row: 3;
     min-height: 0;
+    min-width: 0;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     padding-bottom: env(safe-area-inset-bottom);
   }
 
@@ -702,6 +667,11 @@
   .panel .here {
     color: var(--accent);
   }
+  .panel .bookmark {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+  }
 
   /* Narrow screens: one row of controls; paragraph jumps and the bookmark button move to
      swipes, Shift+arrows and the contents panel. */
@@ -712,14 +682,12 @@
     .controls {
       gap: 0.25rem;
     }
-    /* page number and view switch share the first row, the times take the second */
-    .times {
-      order: 3;
-      width: 100%;
+    .percent {
+      min-width: 2.8rem;
     }
   }
 
-  /* Phones held sideways: word and page side by side. */
+  /* Phones held sideways: word and document side by side. */
   @media (orientation: landscape) and (max-height: 32rem) {
     .reader {
       grid-template-rows: none;

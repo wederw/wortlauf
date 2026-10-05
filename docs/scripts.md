@@ -32,7 +32,7 @@ unten; jedes sieht das Ergebnis der vorherigen.
 2. `tokenize` formt die Tokenliste um.
 3. `timing` legt für jedes Token die Anzeigedauer fest.
 4. `layout` legt fest, wo das Token steht und wie Teile davon aussehen.
-5. Beim Abspielen reagiert `flow` auf Ereignisse, und `stats` ergänzt die Sitzungsübersicht.
+5. Beim Abspielen reagiert `flow` auf Ereignisse; `stats` liefert Kennzahlen zur Sitzung.
 
 ## Token
 
@@ -98,7 +98,7 @@ Zusätzlich im Kontext: `token`.
 ### `stats(session, ctx) → [{ label, value }]`
 
 `session` enthält `words`, `activeMs`, `pauses`, `from`, `to` und `wpm`. Zusätzlich im Kontext:
-`tokens`.
+`tokens`. Die App zeigt diese Kennzahlen derzeit nicht an.
 
 ## Einstellungs-Schema
 
@@ -121,4 +121,4 @@ Daten von anderen Adressen laden, auch nicht über `import()`.
 
 Hooks sind synchron und sollten schnell sein, denn `timing` und `layout` laufen für jedes Token des
 Buches. Wirft ein Hook einen Fehler, schaltet der Kern das Script bis zum nächsten Vorbereiten ab
-und zeigt die Meldung im Lesemodus.
+und zeigt die Meldung über dem Dokument.
